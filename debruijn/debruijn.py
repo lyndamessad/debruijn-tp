@@ -17,20 +17,20 @@ import argparse
 import os
 import sys
 import networkx as nx
-import matplotlib
+import matplotlib.pyplot as plt
 from operator import itemgetter
 import random
 random.seed(9001)
 from random import randint
 import statistics
 
-__author__ = "Your Name"
-__copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__author__ = "Lynda"
+__copyright__ = "Universite  de Paris "
+__credits__ = ["Lynda"]
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__email__ = "lyndamessad96@gmail.com"
 __status__ = "Developpement"
 
 def isfile(path):
@@ -64,7 +64,80 @@ def get_arguments():
                         help="Output contigs in fasta file")
     return parser.parse_args()
 
+def read_fastq(fastq_file):
+    """ This function is used to generate a sequence generator
+        input: fastq file
+        Return: sequence generator
+    """
+    with open(fastq_file) as file:
+        for line in enumerate(file): #parcourir les lines du fichier fastq
+            yield next(file)[:-1]  # On ne prend pas la derniere lignes du fichier 
+            next(file)  # on saute les 2 lignes pour ne récupérer que les séquence 
+            next(file) 
 
+def cut_kmer(sequence, k_size):
+    """ This fiunction is used to genearte kmears from the sequences.
+    Input: sequence ( string) and k-mer (integer)
+    return: k-mer generator
+    """
+    k = k_size
+    for i in range(len(sequence)-k+1):
+        yield (sequence[i:i+k])
+
+
+
+def build_kmer_dic(fastq_file, k_size):
+    """
+    This function is used to calculate  the number of occurence of kmears in a fq file. 
+    We use the functions cut_kmer() and read_fastq()
+    """
+    dict_kmear = {}
+    k = k_size
+
+    for seq in read_fastq(fastq_file): 
+        for k_mear in cut_kmer(seq, k):
+            if k_mear not in dict_kmear: 
+           
+                dict_kmear[k_mear] = 1
+            else: 
+                dict_kmear[k_mear] += 1
+
+    return dict_kmear
+
+def build_graph(k_mear_dict):
+    """
+    trouver les prefixes et suffixes pour le graph 
+    """
+    
+
+    nodes = set() #pas de redondance pas besoin de boucle pr verifier 
+    edges = {} #edge : weight 
+    kmears = list(k_mear_dict)
+    k = len(kmears[0])
+    for kmear in kmears:
+        suffix = kmear[1:]
+        prefixe = kmear[:-1]
+        nodes.add(prefixe)
+        nodes.add(suffix)
+        edges[(prefixe, suffix)] =  k_mear_dict[kmear]
+    """
+    print(edges.keys())
+    G.add_nodes_from(nodes)
+    G.add_edges_from(edges.keys(), weight = edges.values())
+
+    nx.draw(G)
+    plt.savefig("path.png")
+    plt.show()
+    """
+    G=nx.DiGraph()
+    G.add_edges_from(edges)
+
+    
+    
+    print(G.nodes())
+    nx.draw(G)
+    plt.savefig("path.png")
+    plt.show()
 #==============================================================
 # Main program
 #==============================================================
@@ -74,6 +147,18 @@ def main():
     """
     # Get arguments
     args = get_arguments()
+    fastq_file=  vars(args)['fastq_file']
+    sequences = read_fastq(fastq_file)
+    dict_kmear_occur = build_kmer_dic(fastq_file,3)
+    #print(dict_kmear_occur,"\n")
+    graph = build_graph(dict_kmear_occur)
+
+    #print(graph)
+
+    #nodes, edges=  build_graph(dict_kmear_occur)
+    #print(edges)
+
 
 if __name__ == '__main__':
     main()
+
