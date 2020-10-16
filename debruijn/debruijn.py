@@ -224,10 +224,8 @@ def get_contigs(graph, start_nodes, sink_nodes):
             #Generate all simple paths in the graph G from
                 # source(st) to target (sk)
             paths = list(nx.all_simple_paths(graph, st, sk))
-            print(paths)
             if paths:  #!= None ! -> returns True
                 contig = paths[0][0]
-                print(contig)
                 for i in range(1, len(paths[0])):
                     contig += paths[0][i][-1]
                 contigs_list.append((contig, len(contig)))
