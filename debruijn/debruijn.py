@@ -12,31 +12,31 @@
 #    http://www.gnu.org/licenses/gpl-3.0.html
 
 """Perform assembly based on debruijn graph."""
-
+from random import randint
+import statistics
 import argparse
 import os
 import sys
+import random
+from operator import itemgetter
 import networkx as nx
 import matplotlib.pyplot as plt
-from operator import itemgetter
-import random
 random.seed(9001)
-from random import randint
-import statistics
 
 __author__ = "Lynda"
 __copyright__ = "Universite  de Paris "
 __credits__ = ["Lynda"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Lynda "
+__maintainer__ = "Lynda"
 __email__ = "lyndamessad96@gmail.com"
 __status__ = "Developpement"
 
 def isfile(path):
     """Check if path is an existing file.
-      :Parameters:
-          path: Path to the file
+        Parameters:
+        ---------
+        path: Path to the file
     """
     if not os.path.isfile(path):
         if os.path.isdir(path):
@@ -64,74 +64,66 @@ def get_arguments():
                         help="Output contigs in fasta file")
     return parser.parse_args()
 
+
 def read_fastq(fastq_file):
-    """ This function is used to generate a sequence's generator from the fastq file. 
-    Parameter: 
+    """ This function is used to generate a sequence's generator from
+the fastq file.
+    Parameter:
     ---------
-    fastq_file: str// fastq file with all sequences 
+    fastq_file: str// fastq file with all sequences
 
     Return:
     ------
-    sequences generator 
+    sequences generator
     """
     with open(fastq_file) as file:
-        for line in enumerate(file): #parcourir les lines du fichier fastq
-            yield next(file)[:-1]  # On ne prend pas la derniere lignes du fichier 
-            next(file)  # on saute les 2 lignes pour ne récupérer que les séquence 
-            next(file) 
+        for _ in enumerate(file): #parcourir les lines du fichier fastq
+            yield next(file)[:-1]  # prend pas la derniere ligne du fichier
+            next(file)
+            next(file)
+
 
 def cut_kmer(sequence, k_size):
-    """ 
-    Input: sequence ( string) and k-mer (integer)
-    return: k-mer generator
     """
+    This fiunction is used to genearte kmers from the sequences contained
+    in the fastq file.
 
-    """
-    This fiunction is used to genearte kmers from the sequences contained in the fastq file.
-
-    Parameter: 
+    Parameter:
     ---------
-    sequence: str 
-    k_size: int // size of the kmer we want to split with 
+    sequence: str
+    k_size: int // size of the kmer we want to split with
 
     Return:
     ------
     kmers's generator
     """
-
-
-    k = k_size
-    for i in range(len(sequence)-k+1):
-        yield (sequence[i:i+k])
-
+    for i in range(len(sequence)-k_size+1):
+        yield sequence[i:i+k_size]
 
 
 def build_kmer_dic(fastq_file, k_size):
     """
-    This function is used to calculate  the number of occurence of kmears in a fq file. 
+    This function is used to calculate  the number of occurence of
+    kmers in a fq file.
     We use the functions cut_kmer() and read_fastq()
 
-    Parameter: 
+    Parameter:
     ---------
-    fastq_file: str// fastq file with sequence  
-    k_size: int // size of the kmer we want to split with 
+    fastq_file: str// fastq file with sequence
+    k_size: int // size of the kmer we want to split with
 
     Return:
     ------
     kmer_dico: dictionary
         keys: kmer, values: nombre d'occurence of the kmer in the fastq file
     """
-
-
     dict_kmear = {}
-    k = k_size
 
-    for seq in read_fastq(fastq_file): 
-        for k_mear in cut_kmer(seq, k):
-            if k_mear not in dict_kmear.keys(): 
-           
+    for seq in read_fastq(fastq_file):
+        for k_mear in cut_kmer(seq, k_size):
+            if k_mear not in dict_kmear.keys():
                 dict_kmear[k_mear] = 0
-            else: 
+            else:
                 dict_kmear[k_mear] += 1
 
     return dict_kmear
@@ -141,29 +133,136 @@ def build_graph(k_mear_dict):
 
     """
     This function creats the kmer's graph.
-    It deppends of the kmer preffix,suffix and the weight. 
-    Weight: occurence of the kmer 
+    It deppends of the kmer preffix,suffix and the weight.
+    Weight: occurence of the kmer
 
-    Parameter: 
+    Parameter:
     ---------
     km_mear_dict: dictionary
         dictionary of kmer gets from build_kmer_dic() function
-    
+
     Return:
     ------
-    graph: nx DiGraph : name = kmers_graph_kmer_size.png
+    g: nx DiGraph : name = kmers_graph_kmer_size.png
     """
-
     k = vars(get_arguments())['kmer_size'] #kmer's size
-    G=nx.DiGraph()
+    graph = nx.DiGraph()
     for kmear, w in k_mear_dict.items():
-        G.add_edge(kmear[:-1], kmear[1:], weight = w)
+        g.add_edge(kmear[:-1], kmear[1:], weight = w)
+
     plt.subplot(111)
-    
-    nx.draw(G, with_labels=True, font_weight='bold')
-    plt.savefig("kmers_graph_{}.png".format(k))  #graph name 
-    
-    return G
+    nx.draw(graph, with_labels=True, font_weight='bold')
+    plt.savefig("kmers_graph_{}.png".format(k))  #graph name
+    return graph
+
+
+def get_starting_nodes(graph):
+    """
+    This function generats the starting nodes.
+
+    Parameter:
+    ---------
+    graph: nx DiGraph// generated by the build_graph() function.
+
+    Return:
+    ------
+    start_nodes: list // list of starting nodes found in the graph
+    """
+    start_nodes = []
+    nodes = list(graph.nodes())
+    for node in nodes:
+        if node not in list(graph.predecessors(node)):
+        #Returns an iterator over predecessor nodes of n.
+            start_nodes.append(node)
+
+    return start_nodes
+
+
+def get_sink_nodes(graph):
+    """
+    This function generats the sink nodes.
+
+    Parameter:
+    ---------
+    graph: nx DiGraph// generated by the build_graph() function.
+
+    Return:
+    ------
+    sink_nodes: list // list of sink nodes found in the graph
+    """
+    sink_nodes = []
+    nodes = list(graph.nodes())
+    for node in nodes:
+        if not list(graph.successors(node)):
+        #Returns an iterator over successor nodes of n
+            sink_nodes.append(node)
+
+    return sink_nodes
+
+
+def get_contigs(graph, start_nodes, sink_nodes):
+    """
+    This function generats a list of tuples that contains the
+    contig and it's length.
+
+    Parameter:
+    ---------
+    graph: nx DiGraph// generated by the build_graph() function.
+    start_nodes : list// list of starting nodes found in the graph.
+                        Generated by the function get_starting_nodes()
+
+    sink_nodes: lis// list of sink nodes found in the graph.
+                    Generated by the function get_sink_nodes()
+
+    Return:
+    ------
+    contigs_list: list of tuple// liste of tuple [(contig,len(contig))]
+    """
+    contigs_list = []
+    for st in start_nodes: #st : source
+        for sk in sink_nodes: #sk : target
+            #Generate all simple paths in the graph G from
+                # source(st) to target (sk)
+            paths = list(nx.all_simple_paths(graph, st, sk))
+            print(paths)
+            if paths:  #!= None ! -> returns True
+                contig = paths[0][0]
+                print(contig)
+                for i in range(1, len(paths[0])):
+                    contig += paths[0][i][-1]
+                contigs_list.append((contig, len(contig)))
+
+    return contigs_list
+
+
+def save_contigs(contigs, output_file):
+    """
+    This function creats the kmer's graph.
+    It deppends of the kmer preffix,suffix and the weight.
+    Weight: occurence of the kmer
+
+    Parameter:
+    ---------
+    contig: list of tuple// liste of tuple [(contig,len(contig))]
+    output_file : str // name of the output file
+
+    Return:
+    ------
+    file : str // output file in fasta format generated by the functon fill()
+    """
+    with open(output_file, "w") as f:
+        for contig, length in enumerate(contigs):
+            line = ">contig_" + str(contig) + " len=" + str(length[1]) + "\n"
+            f.write(line)
+            f.write(fill(length[0]))
+            f.write("\n")
+
+
+def fill(text, width=80):
+    """Split text with a line return to respect fasta format"""
+    return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
+
+
 #==============================================================
 # Main program
 #==============================================================
@@ -173,13 +272,22 @@ def main():
     """
     # Get arguments
     args = get_arguments()
-    fastq_file=  vars(args)['fastq_file']
-    k = vars(args)['kmer_size']
-    sequences = read_fastq(fastq_file)
-    dict_kmear_occur = build_kmer_dic(fastq_file,k)
-    graph = build_graph(dict_kmear_occur)
 
+    # Sequence generator
+    sequences = read_fastq(args.fastq_file)
 
+    # kmer occuracy disctionary
+    dict_kmer_occur = build_kmer_dic(args.fastq_file,args.kmer_size)
+
+    # Buijn Graph
+    graph = build_graph(dict_kmer_occur)
+
+    #Contigs:
+    contigs = get_contigs(graph,
+                          get_starting_nodes(graph), get_sink_nodes(graph))
+
+    # Save contigs in file
+    save_contigs(contigs, args.output_file)
 
 if __name__ == '__main__':
     main()
