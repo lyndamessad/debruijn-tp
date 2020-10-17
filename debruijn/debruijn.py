@@ -191,7 +191,6 @@ def get_sink_nodes(graph):
     sink_nodes = []
     for node in graph.nodes:
         if len(graph.succ[node]) == 0:
-        #Returns an iterator over successor nodes of n
             sink_nodes.append(node)
 
     return sink_nodes
@@ -215,11 +214,12 @@ def get_contigs(graph, start_nodes : list, sink_nodes : list):
     ------
     contigs_list: list of tuple// liste of tuple [(contig,len(contig))]
     """
+
     contigs_list = []
     for start in start_nodes: #st : source
         for sink in sink_nodes: #sk : target
             #Generate all simple paths in the graph G from
-                # source(st) to target (sk)
+                # source(start) to target (skin)
             paths = list(nx.all_simple_paths(graph, start, sink))
             if paths:  #!= None ! -> returns True
                 contig = paths[0][0]
@@ -261,6 +261,7 @@ def fill(text, width=80):
 def std(liste : list):
     """
     This function calculats the standart deviation.
+    If std > 0 so there is no variation between lenght and weight of paths.
 
     Parameter:
     ---------
@@ -272,6 +273,7 @@ def std(liste : list):
     """
 
     return statistics.stdev(liste)
+
 
 def path_average_weight(graph, path : list):
     """
@@ -286,15 +288,23 @@ def path_average_weight(graph, path : list):
     ------
     path with average weight
     """
-    weight = []
+    """weight = []
 
     for i in range(len(path) - 1):
-        weight.append(graph.edge_data[path[i], path[i+1]]["weight"])
+        weight.append(graph.get_edge_data(path[i], path[i+1])["weight"])
 
     return statistics.mean(weight)
 
+    """
+    list_weight = []
 
-def remove_paths(graph, path : list, delete_entry_node : bool,
+    for u, v, e in graph.subgraph(path).edges(data=True):
+        list_weight.append(e["weight"])
+
+    return statistics.mean(list_weight)
+
+
+def remove_paths(graph, paths : list, delete_entry_node : bool,
                  delete_sink_node : bool):
     """
     This function removes nodes (starting or sink) of path in graph.
@@ -309,15 +319,13 @@ def remove_paths(graph, path : list, delete_entry_node : bool,
     ------
     graph : object networkx DiGraph()// cleaned of unwanted paths.
     """
-    # Initialize the values allowing us to remove or not the first or last nodes
-    for i in range(len(path)):
+    for path in paths:
+        for i in range(len(path)):
 
-        if delete_entry_node:
-            # Remove the entry nodes
-            graph.remove_node(path[i][0])
-        if delete_sink_node:
-            # Remove the sink nodes
-            graph.remove_node(path[i][-1])
+            if (i == 0 and not delete_entry_node) or \
+                (i == len(path) - 1 and not delete_sink_node):
+                continue
+            graph.remove_node(path[i])
 
     return graph
 
@@ -341,13 +349,12 @@ def select_best_path(graph, paths : list, path_length : list, path_weight : list
     ------
     graph : object networkx DiGraph() // graph cleaned of unwanted paths.
     """
-    max_weight = max(path_weight)
     best_path_len = 0
     best_path_index = -1 #out of range.
 
     for i in range(len(paths)):
         # Verify the biggest weight
-        if  path_weight[i] == max_weight:
+        if  path_weight[i] == max(path_weight):
             best_path_len = path_length[i]
             best_path_index = i
             # compare by lenght if we have more than one best weight path
@@ -395,16 +402,16 @@ def solve_bubble(graph, node_pred, node_succ):
     graph : DiGraph // graph cleaned of bubble between node_succ and node_pred.
     """
     bubble_path_list = []
-    p_length = [] #path length
-    p_weight = [] #path weight
+    path_length = [] #path length
+    path_weight = [] #path weight
 
     for path in nx.all_simple_paths(graph, source=node_pred, target=node_succ):
         bubble_path_list.append(path)
-        p_weight.append(path_average_weight(graph, path))
-        p_length.append(len(path))
+        path_weight.append(path_average_weight(graph, path))
+        path_length.append(len(path))
 
     # Keep the best path with select_best_path function
-    return select_best_path(graph, bubble_path_list, p_length, p_weight)
+    return select_best_path(graph, bubble_path_list, path_length, path_weight)
 
 def simplify_bubbles(graph):
     """
@@ -418,35 +425,22 @@ def simplify_bubbles(graph):
     ------
     graph : object networkx DiGraph().
     """
+    bubbles_nodes = []
 
-    nodes_in = get_starting_nodes(graph)
-    nodes_out = get_sink_nodes(graph)
+    # Found out all bubbles
+    for node in graph:
+        node_ancesstors = [x for x in graph.predecessors(node)]
+        if len(node_ancesstors) > 1: # Not empty
+            ancestors = nx.lowest_common_ancestor(graph, node_ancesstors[0],
+                        node_ancesstors[1])
+            bubbles_nodes.append([ancestors, node])
 
-    #to choise beetween ancessor and predecessor we make booleans:
-        # 0 : False, 1: True
-    ances_flag = 0
-    pred_flag = 0
-
-    for start_node in nodes_in:
-        for sink_node_ in nodes_out:
-            paths_list = list(nx.all_simple_paths(graph, source=start_node,
-                                                  target=sink_node))
-            while len(paths_list) > 1: #verify that we have more than 1 path
-                for i in range(len(paths_list[0])):
-                    if paths_list[0][i] != paths_list[1][i]:
-                        if ances_flag == 0:
-                            ancessor = paths_list[0][i-1]
-                            ancess_flag = 1
-                    if paths_list[0][len(paths_list[0])-1-i] != paths_list[1][len(paths_list[1])-1-i]:
-                        if pred_flag == 0:
-                            predecessor = paths_list[0][-i]
-                            pred_flag = 1
-                # Solve bubbles with previous function
-                graph = solve_bubble(graph, predecessor, ancessor)
-                paths_list = list(nx.all_simple_paths(graph, nodes_in, nodes_out))
+    # Save the best path for each couple of bubbles.
+    for nodes in bubbles_nodes:
+        # Solve bubbles with previous function.
+        graph = solve_bubble(graph, nodes[0], nodes[1])
 
     return graph
-
 
 
 #==============================================================
@@ -474,5 +468,6 @@ def main():
         # Save contigs in file
     save_contigs(contigs, args.output_file)
 
+    graph = simplify_bubbles(graph)
 if __name__ == '__main__':
     main()
