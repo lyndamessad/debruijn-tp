@@ -18,7 +18,7 @@ def test_std():
     assert round(std([9, 5, 15, 20]), 1) == 6.6
 
 
-def test_path_weight():
+def test_path_average_weight():
     graph = nx.DiGraph()
     graph.add_weighted_edges_from([(1, 2, 5), (3, 2, 10), (2, 4, 10), (4, 5, 3), 
                                    (5, 6, 10), (5, 7, 10)])
