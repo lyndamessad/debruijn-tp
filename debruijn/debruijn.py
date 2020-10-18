@@ -216,8 +216,8 @@ def get_contigs(graph, start_nodes : list, sink_nodes : list):
     """
 
     contigs_list = []
-    for start in start_nodes: #st : source
-        for sink in sink_nodes: #sk : target
+    for start in start_nodes: #start : source
+        for sink in sink_nodes: #sink : target
             #Generate all simple paths in the graph G from
                 # source(start) to target (skin)
             paths = list(nx.all_simple_paths(graph, start, sink))
@@ -442,6 +442,85 @@ def simplify_bubbles(graph):
 
     return graph
 
+
+def solve_entry_tips(graph, entry_nodes):
+    """
+    This function is used to generate graph without unwanted entry nodes.
+    This entry nodes must be gived as argument for the function.
+
+    Parameter:
+    ---------
+    graph : object networkx DiGraph().
+    entry_nodes : list of unwanted entry nodes.
+
+    Return:
+    ------
+    graph : object networkx DiGraph().
+    """
+    paths_list, paths_length, paths_weight, descendants = [], [], [], []
+
+    for node1 in entry_nodes:
+        for node2 in nx.descendants(graph, node1):
+            if len(graph.pred[node2]) >= 2: #at least 2 pred
+                if node2 not in descendants:
+                    descendants.append(node2)
+                    #list of descendants nodes
+
+    for node1 in entry_nodes:
+        for node2 in descendants:
+            #selcet simple path function
+            for simple_path in nx.all_simple_paths(graph, node1, node2):
+                #Get arguments to select best paths with the //
+                # the select_best_path function
+                paths_list.append(simple_path)
+                paths_length.append(len(simple_path))
+                paths_weight.append(path_average_weight(graph, simple_path))
+        #Run function select_best_path avec delete_entry_node = True
+        # because we solve entry tips.
+        graph = select_best_path(graph, paths_list,
+                                 paths_length, paths_weight,
+                                delete_entry_node=True,
+                                delete_sink_node=False)
+
+    return graph
+
+def solve_out_tips(graph, sink_nodes):
+    """
+    This function is used to generate graph without unwanted sink nodes.
+    This output nodes must be gived as seconde argument for the function.
+
+    Parameter:
+    ---------
+    graph : object networkx DiGraph().
+    sink_nodes : list of unwanted entry nodes.
+
+    Return:
+    ------
+    graph : object networkx DiGraph().
+    """
+    paths_list, paths_length, paths_weight, descendants = [], [], [], []
+
+    for node1 in sink_nodes:
+        for node2 in nx.ancestors(graph, node1):
+            if len(graph.succ[node2]) >= 2 and node2 not in descendants:
+                descendants.append(node2)
+
+    for node in sink_nodes:
+        for node2 in descendants:
+            for simple_path in nx.all_simple_paths(graph, node2, node):
+                #Get arguments to select best paths with the //
+                # the select_best_path function
+
+                paths_list.append(simple_path)
+                paths_length.append(len(simple_path))
+                paths_weight.append(path_average_weight(graph, simple_path))
+
+        #Run function select_best_path avec delete_entry_node = True
+        # because we solve entry tips.
+        graph = select_best_path(graph, paths_list, paths_length, paths_weight,
+                             delete_entry_node=False, delete_sink_node=True)
+
+    return graph
 
 #==============================================================
 # Main program
