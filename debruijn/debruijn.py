@@ -12,17 +12,19 @@
 #    http://www.gnu.org/licenses/gpl-3.0.html
 
 """Perform assembly based on debruijn graph."""
+# Modul importation
+import random
+from random import randrange
+from random import randint
 import statistics
 import argparse
 import os
 import sys
-from random import randint
-from random import randrange
-import random
-from operator import itemgetter
+import matplotlib.pyplot as plt
 import networkx as nx
+
+# Set random seed
 random.seed(9001)
-#import matplotlib.pyplot as plt
 
 __author__ = "Lynda"
 __copyright__ = "Universite  de Paris "
@@ -68,7 +70,7 @@ def get_arguments():
 
 def read_fastq(fastq_file : str):
     """ This function is used to generate a sequence's generator from
-the fastq file.
+    the fastq file.
     Parameter:
     ---------
     fastq_file: str// fastq file with all sequences
@@ -131,7 +133,6 @@ def build_kmer_dict(fastq_file : str, k_size : int):
 
 
 def build_graph(k_mer_dict : dict):
-
     """
     This function creats the kmer's graph.
     It deppends of the kmer preffix,suffix and the weight.
@@ -139,7 +140,7 @@ def build_graph(k_mer_dict : dict):
 
     Parameter:
     ---------
-    km_mear_dict: dictionary
+    km_mear_dict: dictionary //
         dictionary of kmer gets from build_kmer_dict() function
 
     Return:
@@ -174,6 +175,7 @@ def get_starting_nodes(graph):
             start_nodes.append(node)
 
     return start_nodes
+
 
 def get_sink_nodes(graph):
     """
@@ -214,7 +216,6 @@ def get_contigs(graph, start_nodes : list, sink_nodes : list):
     ------
     contigs_list: list of tuple// liste of tuple [(contig,len(contig))]
     """
-
     contigs_list = []
     for start in start_nodes: #start : source
         for sink in sink_nodes: #sink : target
@@ -288,20 +289,12 @@ def path_average_weight(graph, path : list):
     ------
     path with average weight
     """
-    """weight = []
+    weight = []
 
     for i in range(len(path) - 1):
         weight.append(graph.get_edge_data(path[i], path[i+1])["weight"])
 
     return statistics.mean(weight)
-
-    """
-    list_weight = []
-
-    for u, v, e in graph.subgraph(path).edges(data=True):
-        list_weight.append(e["weight"])
-
-    return statistics.mean(list_weight)
 
 
 def remove_paths(graph, paths : list, delete_entry_node : bool,
@@ -335,6 +328,9 @@ def select_best_path(graph, paths : list, path_length : list, path_weight : list
     """
     This function select the best path for the graph.
     In this function the last 2 parametres are False (by default).
+    The best path is the path with the max weight. If we have more than one path,
+    # than we compare their length and we select the longest. If in this case we
+    #found more than one path, we choise with the random function.
 
     Parameter:
     ---------
@@ -459,30 +455,35 @@ def solve_entry_tips(graph, entry_nodes):
     """
     paths_list, paths_length, paths_weight, descendants = [], [], [], []
 
-    for node1 in entry_nodes:
-        for node2 in nx.descendants(graph, node1):
-            if len(graph.pred[node2]) >= 2: #at least 2 pred
-                if node2 not in descendants:
-                    descendants.append(node2)
-                    #list of descendants nodes
+    # Choise nodes that have more than 1 predecessor.
+    for node in graph.nodes():
+        pred = list(graph.predecessors(node))
+        if len(pred) > 1:
+            descendants.append(node)
 
-    for node1 in entry_nodes:
-        for node2 in descendants:
-            #selcet simple path function
-            for simple_path in nx.all_simple_paths(graph, node1, node2):
-                #Get arguments to select best paths with the //
-                # the select_best_path function
-                paths_list.append(simple_path)
-                paths_length.append(len(simple_path))
-                paths_weight.append(path_average_weight(graph, simple_path))
-        #Run function select_best_path avec delete_entry_node = True
-        # because we solve entry tips.
-        graph = select_best_path(graph, paths_list,
-                                 paths_length, paths_weight,
-                                delete_entry_node=True,
-                                delete_sink_node=False)
+    # Case 1: There is not several entry nodes: liste will be empty.
+        #So there not will be any modifications on the graph.
 
-    return graph
+    if len(descendants) == 0:
+        #return graph like in the arguments.
+        return graph
+
+    # Case 2: the descendants list is not empty, there is several descendants.
+    # Use previous function to generate new graph without unwanted entry tips.
+
+    for i in range(len(entry_nodes)):
+        paths_list.append(list(nx.all_simple_paths(graph, entry_nodes[i], descendants[0])))
+        paths_list[i] = paths_list[i][0]
+        paths_weight.append(path_average_weight(graph, paths_list[i]))
+        paths_length.append(len(paths_list[i]))
+
+    # Return the optimal path with select_best_path fucntion.
+        # delete_entry_node muste be True and delete_sink_node False.
+    return select_best_path(graph, paths_list,
+                            paths_length, paths_weight,
+                            delete_entry_node=True,
+                            delete_sink_node=False)
+
 
 def solve_out_tips(graph, sink_nodes):
     """
@@ -492,35 +493,34 @@ def solve_out_tips(graph, sink_nodes):
     Parameter:
     ---------
     graph : object networkx DiGraph().
-    sink_nodes : list of unwanted entry nodes.
+    sink_nodes : list of unwanted output nodes.
 
     Return:
     ------
     graph : object networkx DiGraph().
     """
-    paths_list, paths_length, paths_weight, descendants = [], [], [], []
+    paths_list, paths_length, paths_weight = [], [], []
 
-    for node1 in sink_nodes:
-        for node2 in nx.ancestors(graph, node1):
-            if len(graph.succ[node2]) >= 2 and node2 not in descendants:
-                descendants.append(node2)
-
+    # Collet all tips in the graph
     for node in sink_nodes:
-        for node2 in descendants:
-            for simple_path in nx.all_simple_paths(graph, node2, node):
-                #Get arguments to select best paths with the //
-                # the select_best_path function
+        node1 = [x for x in graph.predecessors(node)][0]
+        node2 = [x for x in graph.successors(node1)]
 
-                paths_list.append(simple_path)
-                paths_length.append(len(simple_path))
-                paths_weight.append(path_average_weight(graph, simple_path))
+        while len(list(graph.predecessors(node1))) > 0 and len(node2) == 1:
+            node1 = [x for x in graph.predecessors(node1)][0]
+            node2 = [x for x in graph.successors(node1)]
 
-        #Run function select_best_path avec delete_entry_node = True
-        # because we solve entry tips.
-        graph = select_best_path(graph, paths_list, paths_length, paths_weight,
-                             delete_entry_node=False, delete_sink_node=True)
+        if len(node2) > 1:
+            for path in nx.all_simple_paths(graph, node1, node):
+                paths_list.append(path)
+                paths_length.append(len(path))
+                paths_weight.append(path_average_weight(graph, path))
 
-    return graph
+    # Return the optimal path with select_best_path fucntion.
+        # delete_entry_node muste be False and delete_sink_node True.
+    return select_best_path(graph, paths_list, paths_length, paths_weight,
+                             delete_entry_node=False,
+                             delete_sink_node=True)
 
 #==============================================================
 # Main program
@@ -534,19 +534,41 @@ def main():
 
     # 1. Bruijn's graph conception
         # 1.a kmer occuracy disctionary
+    print("STEP 1")
+    print("{} file lecture and Debuijn graph conception :\n".format(args.fastq_file))
+
     dict_kmer_occur = build_kmer_dict(args.fastq_file,args.kmer_size)
 
         # 1.b Buijn'tree conception
     graph = build_graph(dict_kmer_occur)
 
     # 2. Manipulation of Bruijn's graph
-        #Contigs:
-    contigs = get_contigs(graph,
-                          get_starting_nodes(graph), get_sink_nodes(graph))
+    nodes_in = get_starting_nodes(graph)
+    nodes_out = get_sink_nodes(graph)
 
-        # Save contigs in file
+    print("STEP 2 : Bubbles resolution\n")
+    graph = simplify_bubbles(graph)
+
+    print("STEP 3:  Tips resolution \n")
+    graph = solve_entry_tips(graph, nodes_in)
+
+    graph = solve_out_tips(graph, nodes_out)
+    #Update of nodes_in and nodes_out
+    nodes_in = get_starting_nodes(graph)
+    nodes_out = get_sink_nodes(graph)
+
+    print("STEP 4: contigs in {} file \n".format(args.output_file))
+    contigs = get_contigs(graph, nodes_in, nodes_out)
+    # Save contigs in file
     save_contigs(contigs, args.output_file)
 
-    graph = simplify_bubbles(graph)
+    # NOT IN THE TP, BUT JUST OPTIONAL Drew graph or not
+    decision = input("Do you want to show the graph ? \n 1: Yes  0: No \n", )
+    if int(decision) == 1:
+        print(" Close graph to exit")
+        nx.draw(graph, with_labels=True, font_weight='bold')
+        plt.show()
+
+
 if __name__ == '__main__':
     main()
